@@ -1,0 +1,7 @@
+# Node/py cache
+node_modules/
+.env
+__pycache__/
+.agents/
+.agent/
+.DS_Store
