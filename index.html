@@ -1,161 +1,37 @@
 <!doctype html>
-<html lang="en">
 <meta charset="utf-8">
-<title>SVG Comparison Gallery</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quick A/B SVG Compare</title>
 <style>
-  :root { --bg:#0b0e14; --fg:#e6e1cf; --muted:#a1a6b4; --accent:#5cc8ff; }
-  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--fg); }
-  header { padding:16px 20px; border-bottom:1px solid #222; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
-  h1 { font-size:18px; margin:0; }
-  .meta { color:var(--muted); font-size:12px; }
-  main { display:grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 60px); }
-  .sidebar { border-right:1px solid #222; padding:12px; overflow:auto; }
-  .thumb { display:flex; align-items:center; gap:10px; padding:8px; border-radius:6px; cursor:pointer; border:1px solid transparent; }
-  .thumb:hover { background:#111; border-color:#222; }
-  .thumb.active { background:#121720; border-color:#2a3950; }
-  .thumb img { width:48px; height:48px; object-fit:contain; background:white; }
-  .thumb .name { font-size:12px; }
-  .content { padding:16px; }
-  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
-  .card { background:#0e1320; border:1px solid #1b2740; border-radius:8px; padding:12px; }
-  .card h3 { margin:0 0 8px; font-size:14px; color:var(--accent); }
-  .viewer { background:white; display:flex; align-items:center; justify-content:center; min-height:320px; border-radius:6px; overflow:auto; }
-  .viewer iframe, .viewer object, .viewer img { width:100%; height:520px; }
-  .controls { display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
-  button, select { background:#182235; color:var(--fg); border:1px solid #2a3950; border-radius:6px; padding:6px 10px; cursor:pointer; }
-  input[type="range"] { width:200px; }
-  .overlay-wrap { position:relative; background:white; min-height:320px; border-radius:6px; overflow:hidden; }
-  .overlay-wrap img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
-  .overlay-wrap img.top { mix-blend-mode:multiply; opacity:0.5; }
-  footer { color:var(--muted); font-size:12px; padding:12px 20px; border-top:1px solid #222; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #111; color: #eee;}
+  header { padding: 10px 14px; border-bottom: 1px solid #333; display:flex; gap:12px; align-items:center;}
+  select, button { background:#1b1b1b; color:#eee; border:1px solid #333; padding:6px 8px; border-radius:6px;}
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:8px; padding:8px; height: calc(100vh - 54px);}
+  .pane { background:#fff; overflow:auto; }
+  .pane object { width:100%; height:100%; }
 </style>
 <header>
-  <h1>SVG Comparison Gallery</h1>
-  <div class="meta" id="meta">Loading…</div>
+  <span>A:</span><select id="a"></select>
+  <span>B:</span><select id="b"></select>
+  <button id="swap">Swap</button>
 </header>
 <main>
-  <aside class="sidebar">
-    <div id="list"></div>
-  </aside>
-  <section class="content">
-    <div class="controls">
-      <label>Mode
-        <select id="mode">
-          <option value="grid">Grid</option>
-          <option value="side">Side-by-side</option>
-          <option value="overlay">Overlay</option>
-        </select>
-      </label>
-      <label>Overlay opacity <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.5"></label>
-      <button id="swap">Swap</button>
-      <span class="meta">Tip: Click thumbnails to select A/B. Hover a card to zoom with browser tools.</span>
-    </div>
-    <div id="panel"></div>
-  </section>
+  <div class="pane"><object id="oa" type="image/svg+xml"></object></div>
+  <div class="pane"><object id="ob" type="image/svg+xml"></object></div>
 </main>
-<footer id="foot"></footer>
 <script>
-(async function(){
-  const meta = document.getElementById('meta');
-  const listEl = document.getElementById('list');
-  const panel = document.getElementById('panel');
-  const foot = document.getElementById('foot');
-  const modeSel = document.getElementById('mode');
-  const opacity = document.getElementById('opacity');
-  const swapBtn = document.getElementById('swap');
+const files = [
+  "consortium-horizon-beta.svg",
+  "solo-horizon-beta.svg",
+].filter(Boolean);
 
-  // Discover SVGs in current directory (static list generated server-side)
-  const files = [
-    "consortium-horizon-beta.svg",
-    "solo-horizon-beta.svg",
-  ].filter(Boolean);
-
-  const state = { a: null, b: null };
-
-  function itemEl(name){
-    const div = document.createElement('div');
-    div.className = 'thumb';
-    div.dataset.name = name;
-    const img = document.createElement('img');
-    img.src = name;
-    const label = document.createElement('div');
-    label.className = 'name';
-    label.textContent = name;
-    div.append(img, label);
-    div.addEventListener('click', ()=>{
-      if(!state.a || (state.a && state.b)) { state.a = name; state.b = null; }
-      else if(!state.b && name !== state.a) { state.b = name; }
-      render();
-    });
-    return div;
-  }
-
-  function renderList(){
-    listEl.innerHTML = '';
-    files.forEach(f=>{
-      const el = itemEl(f);
-      if (state.a === f || state.b === f) el.classList.add('active');
-      listEl.appendChild(el);
-    });
-  }
-
-  function viewer(src){
-    const wrap = document.createElement('div');
-    wrap.className = 'card';
-    const h = document.createElement('h3'); h.textContent = src;
-    const v = document.createElement('div'); v.className = 'viewer';
-    const img = document.createElement('img'); img.src = src; v.appendChild(img);
-    wrap.append(h, v);
-    return wrap;
-  }
-
-  function renderGrid(){
-    const grid = document.createElement('div');
-    grid.className = 'grid';
-    files.forEach(f=> grid.appendChild(viewer(f)));
-    panel.innerHTML = '';
-    panel.appendChild(grid);
-  }
-
-  function renderSide(){
-    if(!state.a || !state.b){ panel.innerHTML = '<div class="meta">Select two SVGs from the left to compare side-by-side.</div>'; return; }
-    const grid = document.createElement('div'); grid.className = 'grid';
-    grid.appendChild(viewer(state.a));
-    grid.appendChild(viewer(state.b));
-    panel.innerHTML = ''; panel.appendChild(grid);
-  }
-
-  function renderOverlay(){
-    if(!state.a || !state.b){ panel.innerHTML = '<div class="meta">Select two SVGs from the left to overlay.</div>'; return; }
-    const card = document.createElement('div'); card.className='card';
-    const h = document.createElement('h3'); h.textContent = state.a + ' over ' + state.b;
-    const wrap = document.createElement('div'); wrap.className='overlay-wrap';
-    const imgB = document.createElement('img'); imgB.src = state.b;
-    const imgA = document.createElement('img'); imgA.src = state.a; imgA.className='top';
-    imgA.style.opacity = opacity.value;
-    wrap.append(imgB, imgA);
-    card.append(h, wrap);
-    panel.innerHTML=''; panel.append(card);
-  }
-
-  function render(){
-    renderList();
-    if(modeSel.value === 'grid') renderGrid();
-    else if(modeSel.value === 'side') renderSide();
-    else renderOverlay();
-    foot.textContent = ${files.length} SVGs • A=${state.a||'-'} • B=${state.b||'-'};
-  }
-
-  modeSel.addEventListener('change', render);
-  opacity.addEventListener('input', ()=>{
-    const top = document.querySelector('.overlay-wrap img.top');
-    if(top) top.style.opacity = opacity.value;
-  });
-  swapBtn.addEventListener('click', ()=>{ const t = state.a; state.a = state.b; state.b = t; render(); });
-
-  meta.textContent = Loaded at ${new Date().toLocaleString()};
-  render();
-})();
+const a = document.getElementById('a');
+const b = document.getElementById('b');
+const oa = document.getElementById('oa');
+const ob = document.getElementById('ob');
+function fill(sel){ files.forEach(f=>{ const o=document.createElement('option'); o.value=f; o.textContent=f; sel.appendChild(o); }); }
+fill(a); fill(b);
+function update(){ oa.data=a.value; ob.data=b.value; }
+a.addEventListener('change', update); b.addEventListener('change', update);
+document.getElementById('swap').addEventListener('click', ()=>{ const t=a.value; a.value=b.value; b.value=t; update(); });
+if(files.length){ a.value=files[0]; b.value=files[files.length-1]; update(); }
 </script>
-</html>
